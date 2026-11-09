@@ -1,0 +1,31 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Pester 5 and PSScriptAnalyzer
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -MinimumVersion 1.22.0 -Scope CurrentUser -Force
+          $PSVersionTable.PSVersion
+          (Get-Module Pester -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1).Version
+      - name: PSScriptAnalyzer (the settings file of the repository is found by the analyzer)
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path . -Recurse -Severity ParseError, Error, Warning
+          $findings | Format-Table -AutoSize
+          if ($findings) { exit 1 }
+      - name: Pester
+        run: Invoke-Pester -Configuration @{ Run = @{ Exit = $true }; Output = @{ Verbosity = 'Detailed' } }
